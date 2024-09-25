@@ -17,3 +17,9 @@ Cargo.lock
 # Added by cargo
 
 /target
+
+# notes sqlite database
+notes.db
+
+# .env file
+.env
