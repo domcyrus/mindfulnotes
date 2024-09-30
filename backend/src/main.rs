@@ -5,6 +5,8 @@ mod ollama;
 
 use anyhow::{Context, Result};
 use axum::{
+    http::header::{AUTHORIZATION, CONTENT_TYPE},
+    http::Method,
     routing::{delete, get, post, put},
     Router,
 };
@@ -12,6 +14,7 @@ use config::Config;
 use models::AppState;
 use sqlx::sqlite::SqlitePoolOptions;
 use std::{path::Path, sync::Arc};
+use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing::{debug, info, Span};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -32,6 +35,21 @@ async fn main() -> Result<()> {
 
     // Load configuration from environment
     let config = Config::from_env().context("Failed to load configuration")?;
+
+    // Enable CORS
+    let cors = CorsLayer::new()
+        // allow `GET`, `POST`, `PUT`, `DELETE` and `OPTIONS` methods
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
+        // allow requests from localhost
+        .allow_origin(AllowOrigin::any())
+        // allow headers `Content-Type` and `Authorization`
+        .allow_headers([CONTENT_TYPE, AUTHORIZATION]);
 
     // Determine the database file path
     let db_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:notes.db".to_string());
@@ -87,6 +105,7 @@ async fn main() -> Result<()> {
                 debug!("streaming {} bytes", chunk.len());
             },
         ))
+        .layer(cors)
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind(&config.listen_addr).await?;
