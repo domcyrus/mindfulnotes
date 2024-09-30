@@ -25,5 +25,16 @@ export const api = {
   delete: (endpoint: string) => 
     fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'DELETE',
-    }).then(response => response.json()),
+    }).then(response => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      if (response.status === 204) {
+        // No content, which is a valid response for DELETE
+        return null;
+      }
+      return response.text().then(text => {
+        return text ? JSON.parse(text) : null;
+      });
+    }),
 };

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../utils/api';
 import { Note, Category } from '../types/Note';
+import ConfirmationModal from './ConfirmationModal';
 
 const Spinner = () => (
   <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -18,6 +19,8 @@ const NotesList: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [expandedWeeks, setExpandedWeeks] = useState<Set<string>>(new Set());
   const [analyzingNotes, setAnalyzingNotes] = useState<Set<number>>(new Set());
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [noteToDelete, setNoteToDelete] = useState<number | null>(null);
 
   useEffect(() => {
     fetchNotes();
@@ -60,6 +63,25 @@ const NotesList: React.FC = () => {
     }
   };
 
+  const handleDeleteClick = (id: number) => {
+    setNoteToDelete(id);
+    setDeleteModalOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (noteToDelete) {
+      try {
+        await api.delete(`/notes/${noteToDelete}`);
+        setNotes(notes.filter(note => note.id !== noteToDelete));
+        setDeleteModalOpen(false);
+        setNoteToDelete(null);
+      } catch (error) {
+        console.error('Error deleting note:', error);
+        // Optionally, you can show an error message to the user here
+      }
+    }
+  };
+
   const getWeekStart = (date: Date) => {
     const d = new Date(date);
     d.setDate(d.getDate() - d.getDay());
@@ -94,101 +116,115 @@ const NotesList: React.FC = () => {
   const weeks = Object.keys(groupedNotes).sort((a, b) => b.localeCompare(a));
 
   return (
-    <div className="relative">
-      <div className="sticky top-0 bg-white z-10 p-4 shadow-md">
-        <h2 className="text-2xl font-bold mb-4">Your Notes</h2>
-        <Link to="/edit" className="mb-4 inline-block bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
-          Create New Note
-        </Link>
-        <div className="flex space-x-4 mt-4">
-          <input
-            type="text"
-            placeholder="Search notes..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="flex-grow p-2 border rounded"
-          />
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value as Category | 'All')}
-            className="p-2 border rounded"
-          >
-            <option value="All">All Categories</option>
-            {Object.values(Category).map(category => (
-              <option key={category} value={category}>{category}</option>
-            ))}
-          </select>
-          <select
-            value={sortOrder}
-            onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
-            className="p-2 border rounded"
-          >
-            <option value="desc">Newest First</option>
-            <option value="asc">Oldest First</option>
-          </select>
+    <>
+      <div className="relative">
+        <div className="sticky top-0 bg-white z-10 p-4 shadow-md">
+          <h2 className="text-2xl font-bold mb-4">Your Notes</h2>
+          <div className="flex space-x-4 mt-4">
+            <input
+              type="text"
+              placeholder="Search notes..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="flex-grow p-2 border rounded"
+            />
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value as Category | 'All')}
+              className="p-2 border rounded"
+            >
+              <option value="All">All Categories</option>
+              {Object.values(Category).map(category => (
+                <option key={category} value={category}>{category}</option>
+              ))}
+            </select>
+            <select
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
+              className="p-2 border rounded"
+            >
+              <option value="desc">Newest First</option>
+              <option value="asc">Oldest First</option>
+            </select>
+          </div>
+        </div>
+        <div className="mt-4">
+          {weeks.map(weekStart => (
+            <div key={weekStart} className="mb-4">
+              <button
+                onClick={() => toggleWeek(weekStart)}
+                className="w-full text-left p-2 bg-gray-100 hover:bg-gray-200 rounded"
+              >
+                Week of {weekStart} ({groupedNotes[weekStart].length} notes)
+                {expandedWeeks.has(weekStart) ? ' ▼' : ' ►'}
+              </button>
+              {expandedWeeks.has(weekStart) && (
+                <ul className="space-y-4 mt-2">
+                  {groupedNotes[weekStart].map(note => (
+                    <li key={note.id} className="bg-white p-4 rounded shadow">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <Link to={`/edit/${note.id}`} className="text-blue-600 hover:underline text-lg">
+                            {note.content.substring(0, 50)}...
+                          </Link>
+                          <p className="text-sm text-gray-500">Category: {note.category}</p>
+                          <p className="text-sm text-gray-500">Created: {new Date(note.created_at).toLocaleString()}</p>
+                          <p className="text-sm text-gray-500">Analyzed: {note.analyzed ? 'Yes' : 'No'}</p>
+                        </div>
+                        <div className="flex flex-col space-y-2">
+                          <Link 
+                            to={`/edit/${note.id}`} 
+                            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded text-sm"
+                          >
+                            Edit
+                          </Link>
+                          {!note.analyzed && (
+                            <button
+                              onClick={() => note.id && handleAnalyze(note.id)}
+                              className="bg-green-500 hover:bg-green-700 text-white font-bold py-1 px-2 rounded text-sm flex items-center justify-center"
+                              disabled={note.id ? analyzingNotes.has(note.id) : false}
+                            >
+                              {note.id && analyzingNotes.has(note.id) ? (
+                                <Spinner />
+                              ) : (
+                                'Analyze'
+                              )}
+                            </button>
+                          )}
+                          {note.analyzed && (
+                            <Link 
+                              to={`/analyze/${note.id}`} 
+                              className="bg-purple-500 hover:bg-purple-700 text-white font-bold py-1 px-2 rounded text-sm"
+                            >
+                              View Analysis
+                            </Link>
+                          )}
+                          <button
+                            onClick={() => note.id && handleDeleteClick(note.id)}
+                            className="bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-2 rounded text-sm"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
         </div>
       </div>
-      <div className="mt-4">
-        {weeks.map(weekStart => (
-          <div key={weekStart} className="mb-4">
-            <button
-              onClick={() => toggleWeek(weekStart)}
-              className="w-full text-left p-2 bg-gray-100 hover:bg-gray-200 rounded"
-            >
-              Week of {weekStart} ({groupedNotes[weekStart].length} notes)
-              {expandedWeeks.has(weekStart) ? ' ▼' : ' ►'}
-            </button>
-            {expandedWeeks.has(weekStart) && (
-              <ul className="space-y-4 mt-2">
-                {groupedNotes[weekStart].map(note => (
-                  <li key={note.id} className="bg-white p-4 rounded shadow">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <Link to={`/edit/${note.id}`} className="text-blue-600 hover:underline text-lg">
-                          {note.content.substring(0, 50)}...
-                        </Link>
-                        <p className="text-sm text-gray-500">Category: {note.category}</p>
-                        <p className="text-sm text-gray-500">Created: {new Date(note.created_at).toLocaleString()}</p>
-                        <p className="text-sm text-gray-500">Analyzed: {note.analyzed ? 'Yes' : 'No'}</p>
-                      </div>
-                      <div className="flex flex-col space-y-2">
-                        <Link 
-                          to={`/edit/${note.id}`} 
-                          className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded text-sm"
-                        >
-                          Edit
-                        </Link>
-                        {!note.analyzed && (
-                          <button
-                            onClick={() => note.id && handleAnalyze(note.id)}
-                            className="bg-green-500 hover:bg-green-700 text-white font-bold py-1 px-2 rounded text-sm flex items-center justify-center"
-                            disabled={note.id ? analyzingNotes.has(note.id) : false}
-                          >
-                            {note.id && analyzingNotes.has(note.id) ? (
-                              <Spinner />
-                            ) : (
-                              'Analyze'
-                            )}
-                          </button>
-                        )}
-                        {note.analyzed && (
-                          <Link 
-                            to={`/analyze/${note.id}`} 
-                            className="bg-purple-500 hover:bg-purple-700 text-white font-bold py-1 px-2 rounded text-sm"
-                          >
-                            View Analysis
-                          </Link>
-                        )}
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
+      <ConfirmationModal
+        isOpen={deleteModalOpen}
+        onClose={() => {
+          setDeleteModalOpen(false);
+          setNoteToDelete(null);
+        }}
+        onConfirm={handleDeleteConfirm}
+        message="Are you sure you want to delete this note?"
+      />
+    </>
   );
 };
 
