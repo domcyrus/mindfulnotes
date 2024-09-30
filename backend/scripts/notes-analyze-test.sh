@@ -10,6 +10,6 @@ curl -X POST http://localhost:8080/notes \
 
 echo -e "\n\nAnalyzing the note..."
 curl -X POST http://localhost:8080/notes/1/analyze \
-  -H "Content-Type: application/json"
+  -H "Content-Type: application/json" | jq '.analysis' | sed 's/\\n/\n/g'
 
 echo -e "\n\nDone."
