@@ -1,5 +1,5 @@
 use reqwest::Client;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use std::sync::Arc;
 
@@ -9,10 +9,11 @@ pub struct AppState {
     pub ollama_url: String,
     pub default_model: String,
     pub pool: Arc<SqlitePool>,
-    pub analysis_prompt_template: String,
+    pub detailed_diary_analysis_prompt: String,
+    pub diary_categorization_prompt: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug, Serialize, Clone)]
 pub struct GenerateParams {
     pub prompt: String,
     pub model: Option<String>,

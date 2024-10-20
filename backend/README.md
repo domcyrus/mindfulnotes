@@ -17,3 +17,13 @@ Alpha state of the backend:
 - adding unit tests
 - documentation
 - play with anaylsis prompt
+  - maybe we should do a sort of weighted best of n approach when analyzing notes because the local models are of pretty low quality...
+- let the llm output a json list of categories, prompt done but no api
+
+## rust
+
+Update rust toolchain and rustup command
+```sh
+rustup update
+rustup self update
+```

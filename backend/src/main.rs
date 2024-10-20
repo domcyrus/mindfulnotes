@@ -19,6 +19,21 @@ use tower_http::trace::TraceLayer;
 use tracing::{debug, info, Span};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+async fn initialize_database(pool: &sqlx::Pool<sqlx::Sqlite>) -> Result<()> {
+    let schema = include_str!("../sql/schema.sql");
+    for statement in schema.split(';') {
+        let statement = statement.trim();
+        if !statement.is_empty() {
+            sqlx::query(statement)
+                .execute(pool)
+                .await
+                .with_context(|| format!("Failed to execute SQL statement: {}", statement))?;
+        }
+    }
+    info!("Database schema initialized successfully");
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // Load .env file
@@ -68,28 +83,17 @@ async fn main() -> Result<()> {
         .await
         .context("Failed to connect to SQLite database")?;
 
-    // Create notes table if it doesn't exist
-    sqlx::query(
-        "CREATE TABLE IF NOT EXISTS notes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            content TEXT NOT NULL,
-            analyzed BOOLEAN NOT NULL DEFAULT 0,
-            category TEXT NOT NULL DEFAULT 'unspecified',
-            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            analysis TEXT
-        )",
-    )
-    .execute(&pool)
-    .await
-    .context("Failed to create notes table")?;
+    initialize_database(&pool)
+        .await
+        .context("Failed to initialize database schema")?;
 
     let state = AppState {
         client: Arc::new(reqwest::Client::new()),
         ollama_url: config.ollama_url.clone(),
         default_model: config.default_model.clone(),
         pool: Arc::new(pool),
-        analysis_prompt_template: config.analysis_prompt_template.clone(),
+        detailed_diary_analysis_prompt: config.detailed_diary_analysis_prompt.clone(),
+        diary_categorization_prompt: config.diary_categorization_prompt.clone(),
     };
 
     let app = Router::new()
@@ -100,6 +104,7 @@ async fn main() -> Result<()> {
         .route("/notes/:id", put(notes::update_note))
         .route("/notes/:id", delete(notes::delete_note))
         .route("/notes/:id/analyze", post(notes::analyze_note))
+        .route("/notes/:id/categoryze", post(notes::categorize_note))
         .layer(TraceLayer::new_for_http().on_body_chunk(
             |chunk: &axum::body::Bytes, _latency: std::time::Duration, _span: &Span| {
                 debug!("streaming {} bytes", chunk.len());
